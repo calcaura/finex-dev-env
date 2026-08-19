@@ -7,7 +7,7 @@
 # `macos-latest` GitHub Actions job as the authoritative iOS check.
 # See /finex-next/../.github/workflows/ci.yml and the plan doc for details.
 
-FROM eclipse-temurin:17-jdk-jammy
+FROM eclipse-temurin:25-jdk-jammy
 
 # Google renamed the API 37 platform package to "37.0" (with a point
 # release) partway through the API 37 cycle; sdkmanager has no bare
@@ -101,9 +101,9 @@ RUN useradd -m -s /bin/bash cylon &&\
   echo "cylon ALL=(ALL) NOPASSWD:ALL" | tee /etc/sudoers.d/cylon
 
 # Add scripts
-ENV PECUNIA_SCRIPT_DIR=/opt/pecunia/scripts
+ENV FINEX_SCRIPT_DIR=/opt/finex/scripts
 
-ADD ./build-env/scripts ${PECUNIA_SCRIPT_DIR}
+ADD ./build-env/scripts ${FINEX_SCRIPT_DIR}
 ADD ./build-env/.githooks /.githooks
 
 WORKDIR /workspaces/finex-next

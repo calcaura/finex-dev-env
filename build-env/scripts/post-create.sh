@@ -1,6 +1,6 @@
 #!/bin/bash
 
-exec 2>&1 1> /tmp/pecunia-env-post-create.log
+exec 2>&1 1> /tmp/finex-env-post-create.log
 
 HOST_MOUNT_PATH=$HOME/host
 FILES_TO_SYMLINK=(
@@ -60,18 +60,7 @@ grep ${expected_host} /etc/hosts || (echo "127.0.0.1 ${expected_host}" | sudo te
 git config -f ~/.gitconfig core.hooksPath /.githooks
 
 
-# Setup the pecunia env
-if [ -z "$PECUNIA_SRC" ]; then
-    echo "PECUNIA_SRC is not set. Please set it to the path of the pecunia src repository."
-    exit 1
-fi
-
-if [ ! -d "$PECUNIA_SRC" ]; then
-    echo "PECUNIA_SRC is not a directory. Please set it to the path of the pecunia src repository."
-    exit 1
-fi
-
-if [ -z "$PECUNIA_SCRIPT_DIR" ]; then
-    echo "PECUNIA_SCRIPT_DIR is not set. Please set it to the path of the pecunia src repository."
+if [ -z "$FINEX_SCRIPT_DIR" ]; then
+    echo -e "\033[0;31mFINEX_SCRIPT_DIR is not set. Please set it to the path of the pecunia src repository.\033[0m" >&2
     exit 1
 fi
