@@ -40,7 +40,24 @@ ENV ANDROID_SDK_ROOT=/opt/android-sdk \
 #  - gh (GitHub CLI): pushing branches / opening PRs from inside the
 #    container, mirroring the host workflow
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        unzip curl git ca-certificates gnupg software-properties-common \
+        ca-certificates \
+        curl \
+        git \
+        gnupg \
+        lsof \
+        man \
+        moreutils \
+        musl-tools \
+        net-tools \
+        openssh-client \
+        pkg-config \
+        podman \
+        procps \
+        python3 \
+        python3-pip \
+        software-properties-common \
+        sudo \
+        unzip \
     && add-apt-repository -y ppa:xtradeb/apps \
     && apt-get update && apt-get install -y --no-install-recommends chromium \
     && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
@@ -77,5 +94,16 @@ RUN yes | sdkmanager --licenses > /dev/null \
 # Gradle itself is not baked in on purpose — the project's own ./gradlew
 # wrapper (added when the KMP project is scaffolded) pins the exact Gradle
 # version and downloads it on first run, same as the existing Android app.
+
+RUN useradd -m -s /bin/bash cylon &&\
+  usermod -aG sudo cylon &&\
+  passwd -d cylon &&\
+  echo "cylon ALL=(ALL) NOPASSWD:ALL" | tee /etc/sudoers.d/cylon
+
+# Add scripts
+ENV PECUNIA_SCRIPT_DIR=/opt/pecunia/scripts
+
+ADD ./build-env/scripts ${PECUNIA_SCRIPT_DIR}
+ADD ./build-env/.githooks /.githooks
 
 WORKDIR /workspaces/finex-next
