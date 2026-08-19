@@ -7,7 +7,16 @@
 # `macos-latest` GitHub Actions job as the authoritative iOS check.
 # See /finex-next/../.github/workflows/ci.yml and the plan doc for details.
 
-FROM eclipse-temurin:25-jdk-jammy
+# Pinned to linux/amd64 rather than following the host's native arch: AGP's
+# aapt2 (Android resource compiler) has no native linux/aarch64 build, so an
+# arm64 container (the default Docker Desktop would build/run on an Apple
+# Silicon Mac) fails Android resource processing outright ("aapt2 ... Daemon
+# startup failed" / "rosetta error: failed to open elf"). Forcing amd64 here
+# makes Docker Desktop run the whole container under Rosetta on Apple
+# Silicon instead — transparent and fast — and is a no-op on an amd64 host.
+# Confirmed by an actual :androidApp:assembleDebug run in this Phase 0
+# session that failed on native arm64 with exactly that aapt2 error.
+FROM --platform=linux/amd64 eclipse-temurin:25-jdk-jammy
 
 # Google renamed the API 37 platform package to "37.0" (with a point
 # release) partway through the API 37 cycle; sdkmanager has no bare
@@ -39,11 +48,16 @@ ENV ANDROID_SDK_ROOT=/opt/android-sdk \
 #    pull from there instead.
 #  - gh (GitHub CLI): pushing branches / opening PRs from inside the
 #    container, mirroring the host workflow
+#  - libatomic1: the Node.js toolchain Kotlin/Wasm downloads for
+#    wasmJsBrowserDistribution/-Test (webpack bundling, the yarn/npm
+#    tooling) fails to start without it ("libatomic.so.1: cannot open
+#    shared object file") — not pulled in by anything else here.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
         git \
         gnupg \
+        libatomic1 \
         lsof \
         man \
         moreutils \
