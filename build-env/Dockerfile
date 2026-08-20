@@ -162,9 +162,42 @@ RUN yes | sdkmanager --licenses > /dev/null \
         "cmake;${ANDROID_CMAKE_VERSION}"
 
 
-# Gradle itself is not baked in on purpose — the project's own ./gradlew
-# wrapper (added when the KMP project is scaffolded) pins the exact Gradle
-# version and downloads it on first run, same as the existing Android app.
+# Gradle: baked in, and the wrapper's own distribution cache pre-warmed too
+# — not just a standalone `gradle` on PATH. finex-next's CI scripts call
+# `./gradlew`, which always manages its own versioned distribution under
+# GRADLE_USER_HOME independent of what's on PATH; leaving that cache cold
+# meant every fresh CI job downloaded gradle-9.4.1-bin.zip from
+# services.gradle.org on its own, which is exactly the "installs tools
+# during CI" cost this image exists to front-load (same reasoning as the
+# Android SDK above).
+#
+# GRADLE_USER_HOME is set explicitly rather than left as the default
+# $HOME/.gradle: GitHub Actions container jobs mount their own $HOME over
+# whatever the image sets, so a cache baked in under the image's $HOME
+# would be invisible at CI time. An explicit path here survives that.
+#
+# Primed using finex-next's *real* gradlew + gradle/wrapper/gradle-wrapper.
+# {properties,jar} (vendored below, copied from finex-next's repo — keep
+# them in sync there if finex-next ever bumps its Gradle version) rather
+# than hand-deriving the wrapper's hash-keyed cache path: running the actual
+# wrapper is the only way to guarantee the cache entry lands exactly where
+# `./gradlew` will look for it later, and this doubles as the standalone
+# `gradle` CLI install via the symlink at the end (no second download).
+#
+# Left world-writable at the end: this image's users differ by context
+# (root in CI container jobs, `cylon` in the local devcontainer per
+# remoteUser below), and both need to write their own dependency-cache
+# entries into GRADLE_USER_HOME on top of the primed wrapper dist.
+ENV GRADLE_USER_HOME=/opt/gradle-home
+ADD ./build-env/gradle-wrapper-prime /tmp/gradle-wrapper-prime
+RUN cd /tmp/gradle-wrapper-prime \
+    && chmod +x gradlew \
+    && ./gradlew --version \
+    && gradle_bin="$(find "${GRADLE_USER_HOME}/wrapper/dists" -type f -name gradle -path '*/bin/gradle')" \
+    && ln -s "${gradle_bin}" /usr/local/bin/gradle \
+    && gradle --version \
+    && cd / && rm -rf /tmp/gradle-wrapper-prime \
+    && chmod -R o+rwX,g+rwX "${GRADLE_USER_HOME}"
 
 RUN useradd -m -s /bin/bash cylon &&\
   usermod -aG sudo,docker cylon &&\
