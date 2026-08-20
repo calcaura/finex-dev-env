@@ -79,7 +79,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
         > /etc/apt/sources.list.d/github-cli.list \
     && apt-get update && apt-get install -y --no-install-recommends gh \
+    && curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+        -o /usr/share/keyrings/docker-archive-keyring.asc \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.asc] https://download.docker.com/linux/ubuntu jammy stable" \
+        > /etc/apt/sources.list.d/docker.list \
+    && apt-get update && apt-get install -y --no-install-recommends \
+        docker-ce-cli \
+        docker-compose-plugin \
+        docker-buildx-plugin \
     && rm -rf /var/lib/apt/lists/*
+
+# Docker CLI only — no dockerd/containerd is started in this image. The
+# consumer's devcontainer.json is expected to bind-mount the host's
+# /var/run/docker.sock (Docker Desktop) so `docker`/`docker compose` here
+# talk to the host engine ("docker-outside-of-docker"), the same way `gh`
+# above talks to github.com rather than running its own server. The `docker`
+# group exists so the socket can be shared via group membership if its host
+# GID is aligned at container start; until then cylon's passwordless sudo
+# (below) covers `sudo docker ...`.
+RUN groupadd -f docker
 
 ENV CHROME_BIN=/usr/bin/chromium
 
@@ -105,12 +123,13 @@ RUN yes | sdkmanager --licenses > /dev/null \
         "ndk;${ANDROID_NDK_VERSION}" \
         "cmake;${ANDROID_CMAKE_VERSION}"
 
+
 # Gradle itself is not baked in on purpose — the project's own ./gradlew
 # wrapper (added when the KMP project is scaffolded) pins the exact Gradle
 # version and downloads it on first run, same as the existing Android app.
 
 RUN useradd -m -s /bin/bash cylon &&\
-  usermod -aG sudo cylon &&\
+  usermod -aG sudo,docker cylon &&\
   passwd -d cylon &&\
   echo "cylon ALL=(ALL) NOPASSWD:ALL" | tee /etc/sudoers.d/cylon
 
@@ -119,5 +138,10 @@ ENV FINEX_SCRIPT_DIR=/opt/finex/scripts
 
 ADD ./build-env/scripts ${FINEX_SCRIPT_DIR}
 ADD ./build-env/.githooks /.githooks
+
+# Shell aliases for interactive use (e.g. `gis`, `dag`), applied system-wide
+# so they're available to any user's non-login interactive bash shell.
+ADD ./build-env/.bash_aliases /tmp/.bash_aliases
+RUN cat /tmp/.bash_aliases >> /etc/bash.bashrc && rm /tmp/.bash_aliases
 
 WORKDIR /workspaces/finex-next
