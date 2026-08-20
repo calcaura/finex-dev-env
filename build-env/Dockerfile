@@ -72,6 +72,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         software-properties-common \
         sudo \
         unzip \
+        xz-utils \
     && add-apt-repository -y ppa:xtradeb/apps \
     && apt-get update && apt-get install -y --no-install-recommends chromium \
     && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
@@ -86,8 +87,45 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get update && apt-get install -y --no-install-recommends \
         docker-ce-cli \
         docker-compose-plugin \
-        docker-buildx-plugin \
-    && rm -rf /var/lib/apt/lists/*
+        docker-buildx-plugin
+
+# shellcheck + actionlint: the static checks for the two things this repo
+# has a lot of and Gradle can't check — the bash in scripts/**/*.sh, and
+# .github/workflows/ci.yml (actionlint validates workflow syntax, action
+# inputs and ${{ }} expressions, and shells out to shellcheck for `run:`
+# blocks). Both are single static binaries from their upstream releases
+# rather than apt packages: Ubuntu 22.04 ships shellcheck 0.8.0 (2021) and
+# no actionlint at all. Version-pinned so a rebuild can't silently change
+# what CI-adjacent linting accepts.
+#
+# These live here rather than in the base image because they're about this
+# repo's scripts and workflow, not the KMP toolchain; if finex-dev-env's
+# other consumers end up wanting them too, move them there instead (see the
+# note above about keeping provisioning in the base image). Note the
+# consequence: ci.yml's containerized jobs run the *base* image directly,
+# not this Dockerfile, so these two are a local-only check for now - moving
+# them into finex-dev-env is what would let scripts/check.sh run them in CI.
+# Downloaded to a file and then extracted, rather than curl | tar: RUN's
+# shell is dash, which has no `set -o pipefail`, so a failing curl in a
+# pipeline would be masked by tar's exit status and bake a broken layer.
+# xz-utils is needed because shellcheck only publishes .tar.xz and the base
+# image has no xz.
+ARG SHELLCHECK_VERSION=0.11.0
+ARG ACTIONLINT_VERSION=1.7.12
+RUN set -eux; \
+    curl -fsSL -o /tmp/shellcheck.tar.xz \
+        "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.xz"; \
+    tar -xf /tmp/shellcheck.tar.xz -C /tmp; \
+    install -m 0755 "/tmp/shellcheck-v${SHELLCHECK_VERSION}/shellcheck" /usr/local/bin/shellcheck; \
+    curl -fsSL -o /tmp/actionlint.tar.gz \
+        "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"; \
+    tar -xf /tmp/actionlint.tar.gz -C /tmp actionlint; \
+    install -m 0755 /tmp/actionlint /usr/local/bin/actionlint; \
+    rm -rf /tmp/shellcheck.tar.xz "/tmp/shellcheck-v${SHELLCHECK_VERSION}" /tmp/actionlint.tar.gz /tmp/actionlint; \
+    shellcheck --version; \
+    actionlint --version
+
+RUN rm -rf /var/lib/apt/lists/*
 
 # Docker CLI only — no dockerd/containerd is started in this image. The
 # consumer's devcontainer.json is expected to bind-mount the host's
